@@ -1,0 +1,13 @@
+name: test
+title: test
+username:
+account: 9fvv6i-faith-ha
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 9228082
+bundleId: 7295980
+url: https://9fvv6i-faith-ha.shinyapps.io/test/
+when: 1685699112.51587
+lastSyncTime: 1685699112.51591
+asMultiple: FALSE
+asStatic: FALSE
