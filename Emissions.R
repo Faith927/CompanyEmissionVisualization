@@ -1,0 +1,567 @@
+rm(list=ls())
+library(shiny)
+library(shinydashboard)
+library(ggplot2)
+library(plotly)
+library(readxl)
+library(dplyr)
+library(tidyverse)
+library(viridis)
+library(RColorBrewer)
+library(hrbrthemes)
+
+# Read in Dataframe
+df <- read_csv("emissions_low_granularity.csv")
+df_emissions <- read_csv("emissions_high_granularity.csv")
+
+# rename columns
+names(df)[names(df) == "parent_entity"] <- "Company"
+names(df)[names(df) == "parent_type"] <- "Status"
+names(df)[names(df) == "year"] <- "Year"
+names(df)[names(df) == "total_emissions_MtCO2e"] <- "Emissions"
+
+df <- df %>% 
+  mutate(Status = recode(Status,  "State-owned Entity" = "State-Owned", 
+                         "Investor-owned Company" = "Investor-Owned"))
+
+names(df_emissions)[names(df_emissions) == "total_emissions_MtCO2e"] <- "Emissions"
+
+
+df_emissions$Emissions <- as.numeric(as.character(df_emissions$Emissions))
+
+# coal, gas, ect.
+df_global <- df_emissions %>%
+  filter(year >= 1960) %>%
+  group_by(commodity, year) %>%
+  summarize(Emissions = sum(Emissions, na.rm = TRUE))
+
+processed_df <- df_global %>%
+  mutate(commodity = ifelse(grepl("Coal$", commodity), "Coal", commodity)) %>%
+  group_by(year, commodity) %>%
+  summarize(Emissions = sum(as.numeric(Emissions), na.rm = TRUE), .groups = 'drop')
+
+
+
+# Sum emissions by company and add rank
+company_emissions <- df %>%
+  group_by(Company) %>%
+  summarize(Total_Emissions = sum(Emissions, na.rm = TRUE)) %>%
+  arrange(desc(Total_Emissions)) %>%
+  mutate(Rank = row_number())
+
+# Merge ranks back into original df
+df <- df %>%
+  left_join(company_emissions %>% select(Company, Rank), by = "Company")
+
+# Helper function to compute value change based on available data
+compute_value_change <- function(emissions, years) {
+  # Check if the years 2015 or 2022 are present
+  if (any(years %in% c(2015, 2022))) {
+    # Find the emissions value for the earliest available year
+    first_year <- min(years)
+    first_year_value <- emissions[years == first_year]
+    
+    # Find the emissions value for the latest available year
+    last_year <- max(years)
+    last_year_value <- emissions[years == last_year]
+    
+    # Compare the emissions values
+    if (last_year_value > first_year_value) {
+      return("Increased")
+    } else if (last_year_value < first_year_value) {
+      return("Decreased")
+    } else {
+      return("No Change")
+    }
+  } else {
+    return(NA)  # Return NA if neither 2015 nor 2022 are present
+  }
+}
+
+
+
+# Example of applying this within mutate
+df_change <- df %>%
+  group_by(Company) %>%
+  mutate(value_change = compute_value_change(Emissions, Year))
+
+
+# # Apply the helper function within mutate
+# df3 <- df2 %>%
+#   group_by(Company) %>%
+#   mutate(value_change = compute_value_change(Emissions, Year))
+
+filtered_df <- df_change %>% filter(Year == 2022)
+
+filtered_df$Rank_Group <- cut(filtered_df$Rank, 
+                              breaks = c(0, 25, 50, 75, 100, 125), 
+                              labels = c("1-25", "26-50", "51-75", "76-100", "101-125"), 
+                              include.lowest = TRUE)
+
+
+grouped_df <- filtered_df %>%
+  group_by(Rank_Group, Status) %>%
+  summarise(Total_Emissions = sum(Emissions))
+
+
+company_counts <- filtered_df %>%
+  filter(Year == 2022) %>%
+  group_by(Rank_Group, Status) %>%
+  summarise(Company_Count = n())
+
+
+grouped_df <- left_join(grouped_df, company_counts, by = c("Rank_Group", "Status"))
+# df2$Year <- as.numeric(df2$Year)
+
+count <- merge(filtered_df, df_change, by = c("Company", "Status", "Rank", "Year", "Emissions"))
+
+
+company_count <- count %>%
+  filter(Status %in% c("Investor-Owned", "State-Owned", "Nation State") & value_change.y %in% c("Increased", "Decreased")) %>%
+  group_by(Rank_Group, Status, value_change.y) %>%
+  summarise(Count = n())
+
+investor_count <- company_count %>%
+  filter(Status == "Investor-Owned")
+
+state_count <- company_count %>%
+  filter(Status == "State-Owned")
+
+nation_count <- company_count %>%
+  filter(Status == "Nation State")
+
+df_grouped <- df %>%
+  filter(Year >= 1960) %>%
+  group_by(Status, Year) %>%
+  summarize(Emissions = sum(Emissions, na.rm = TRUE))
+
+df_global <- df_emissions %>%
+  filter(year >= 1960) %>%
+  group_by(commodity, year) %>%
+  summarize(Emissions = sum(Emissions, na.rm = TRUE))
+
+processed_df <- df_global %>%
+  mutate(commodity = ifelse(grepl("Coal$", commodity), "Coal", commodity)) %>%
+  group_by(year, commodity) %>%
+  summarize(Emissions = sum(as.numeric(Emissions), na.rm = TRUE), .groups = 'drop')
+
+processed_df$year <- as.numeric(processed_df$year)
+
+
+ggplot(processed_df, aes(x=year, y=Emissions, fill=commodity)) + 
+  geom_area(alpha=0.6 , size=.5, colour="white") +
+  scale_fill_viridis(discrete = T) +
+  theme_minimal() +
+  theme(
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor.x = element_blank(),
+    panel.grid.minor.y = element_blank(),
+    axis.line = element_line(color = "black"),
+    axis.ticks.y = element_line(color = "black"),
+    axis.text.y = element_text(hjust = 1),
+    axis.text.x = element_text(hjust = .5),
+    legend.title = element_blank()
+  ) +
+  labs(x = "", y = HTML("MtCO<sub>2</sub>e"),
+       title = HTML("State, Investor, & Nation MtCO<sub>2</sub>e Emissions <br><span style='font-size: 12px;'>
+</span>")) +
+  scale_x_continuous(breaks = c(1960, 1980, 2000, 2022)) +
+  scale_y_continuous(limits = c(0, NA), expand = c(0, 0)) +
+  labs(col = NULL)
+
+p <- ggplot(processed_df, aes(x=year, y=Emissions, fill=commodity)) + 
+  geom_area(alpha=0.6 , size=.5, colour="white") +
+  scale_fill_viridis(discrete = T) +
+  theme_minimal() +
+  theme(
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor.x = element_blank(),
+    panel.grid.minor.y = element_blank(),
+    axis.line = element_line(color = "black"),
+    axis.ticks.y = element_line(color = "black"),
+    axis.text.y = element_text(hjust = 1),
+    axis.text.x = element_text(hjust = .5),
+    legend.title = element_blank()
+  ) +
+  labs(x = "", y = "MtCO<sub>2</sub>e",
+       title = "State, Investor, & Nation MtCO<sub>2</sub>e Emissions") +
+  scale_x_continuous(breaks = c(1960, 1980, 2000, 2022)) +
+  scale_y_continuous(limits = c(0, NA), expand = c(0, 0)) +
+  labs(col = NULL)
+
+ggplotly(p)
+############
+
+# UI
+ui <- dashboardPage(
+  dashboardHeader(title = HTML("Breakdown of MtCO<sub>2</sub>e")),
+  dashboardSidebar(
+    sidebarMenu(
+      menuItem("Overview", tabName = "global", icon = icon("area-chart")),
+      menuItem("Highest Company MtCO<sub>2</sub>e Emitting Comparison", tabName = "investorstate", icon = icon("area-chart")),
+      menuItem("Individual Company Comparison ", tabName = "linechart", icon = icon("line-chart"))
+    )
+  ),
+  dashboardBody(
+    tabItems(
+      # Global tab
+      tabItem(tabName = "global",
+              fluidRow(
+                infoBox(
+                  "Top 122 Companies Represent", "72%", HTML("of the world's MtCO<sub>2</sub>e"), icon
+                  = icon("exclamation-circle"),
+                  fill = TRUE
+                ),
+                infoBox(
+                  "Global Emissions Reached", HTML("38 MtCO<sub>2</sub>e"), "in 2015", icon =
+                    icon("tree"), color = "blue",
+                  fill = TRUE
+                ),
+                infoBox(
+                  HTML("MtCO<sub>2</sub>e refers to"), "Gigatonnes", "of Carbon Dioxide", icon =
+                    icon("info"), color = "teal",
+                  fill = TRUE
+                )
+              ),
+              fluidRow(
+                column(width = 6,
+                       plotlyOutput("areaChart")
+                ),
+                column(width = 6,
+                       plotlyOutput("areaChart1")
+                )
+              )
+      ),
+      # Investor vs State Chart tab
+      tabItem(tabName = "investorstate",
+              fluidRow(
+                infoBox(
+                  "Top 25 Companies represent", "51%", HTML("of the world's MtCO<sub>2</sub>e"), icon =
+                    icon("cloud"),
+                  fill = TRUE
+                  
+                ),
+                infoBox(
+                  "State Companies", "Increasing", HTML("MtCO<sub>2</sub>e in All Categories"), icon =
+                    icon("angle-double-up"), color = "blue",
+                  fill = TRUE
+                ),
+                infoBox(
+                  "Top Investor Companies Most", "Likely to Decrease", HTML("MtCO<sub>2</sub>e"), icon =
+                    icon("angle-double-down"), color = "teal",
+                  fill = TRUE
+                ),
+              ),
+              fluidRow(
+                column(6, box(width = 12, plotlyOutput("investorChart1", height = 500))),
+                column(6,
+                       box(width = 12, plotlyOutput("investorChart2", height = 175)),
+                       box(width = 12, plotlyOutput("investorChart3", height = 175)),
+                       box(width = 12, plotlyOutput("investorChart4", height = 175))
+                )
+              )
+      ),
+      # Individual Company Comparison tab
+      tabItem(tabName = "linechart",
+              fluidRow(
+                infoBox(
+                  "China (Coal) is the", "Largest", HTML("MtCO<sub>2</sub>e Emitter"), icon = icon("cloud"),
+                  fill = TRUE
+                ),
+                infoBox(
+                  "Companies Generally", "Increasing", "Emissions", icon = icon("tree"), color = "blue",
+                  fill = TRUE
+                ),
+                infoBox(
+                  "State Companies", "Key to Reducing", HTML("Global MtCO<sub>2</sub>e"), icon =
+                    icon("exclamation-circle"), color = "teal",
+                  fill = TRUE
+                )
+              ),
+              sidebarLayout(
+                sidebarPanel(
+                  selectizeInput("company", "Select Company", choices = unique(df$Company), multiple =
+                                   TRUE),
+                  selectizeInput("rank", "Select Rank", choices = 1:100, multiple = TRUE),
+                  helpText("Maximum 5 companies allowed")
+                  
+                ),
+                mainPanel(
+                  plotlyOutput("linechart", height = "340px", width = "100%"),
+                  fluidRow(
+                    tags$div(
+                      style = "margin-top: 10px; margin-left: 10px;",
+                      tags$p("Data Reference:"),
+                      tags$ul(
+                        tags$li(
+                          "Paul, G., Heede, R., & Vlugt, I. (2017).",
+                          tags$em("Climate Accountability Institute"),
+                          ". Climate Accountability Institute .",
+                          tags$a(
+                            href = "https://climateaccountability.org/publications.html",
+                            "https://climateaccountability.org/publications.html"
+                          )
+                        )
+                      )
+                    )
+                  )
+                )
+              )
+      )
+    )
+  )
+)
+
+# Server
+server <- function(input, output, session) {
+  
+  observe({
+    updateSelectizeInput(session, "company", choices = unique(df$Company), selected =
+                           input$company)
+    updateSelectizeInput(session, "rank", choices = 1:100, selected = input$rank)
+    
+    selected_company <- input$company
+    selected_rank <- input$rank
+    
+    total_count <- length(selected_company) + length(selected_rank)
+    excess <- max(0, total_count - 5)
+    
+    if (excess > 0) {
+      if (length(selected_company) > excess) {
+        selected_company <- selected_company[1:(length(selected_company) - excess)]
+      } else {
+        selected_company <- NULL
+        selected_rank <- selected_rank[1:(length(selected_rank) - (excess - length(selected_company)))]
+      }
+    }
+    
+    updateSelectizeInput(session, "company", choices = unique(df$Company), selected =
+                           selected_company)
+    updateSelectizeInput(session, "rank", choices = 1:100, selected = selected_rank)
+  })
+  
+  
+  
+  filtered_df <- reactive({
+    data <- df
+    
+    if (!is.null(input$Company) && !is.null(input$rank)) {
+      selected_items <- c(input$Company, input$rank)
+      data <- data[data$Company %in% selected_items | data$Rank %in% selected_items, ]
+    } else if (!is.null(input$company)) {
+      data <- data[data$Company %in% input$company, ]
+    } else if (!is.null(input$rank)) {
+      data <- data[data$Rank %in% input$rank, ]
+    }
+    
+    data
+  })
+  
+  filtered_df <- reactive({
+    data <- df
+    
+    if (!is.null(input$company) && !is.null(input$rank)) {
+      selected_items <- c(input$company, input$rank)
+      data <- data[data$Company %in% selected_items | data$Rank %in% selected_items, ]
+    } else if (!is.null(input$company)) {
+      data <- data[data$Company %in% input$company, ]
+    } else if (!is.null(input$rank)) {
+      data <- data[data$Rank %in% input$rank, ]
+    }
+    
+    data
+  })
+  
+  output$linechart <- renderPlotly({
+    if (is.null(input$company) && is.null(input$rank)) {
+      # Empty plot with only axis lines
+      ggplot() +
+        theme_minimal() +
+        theme(axis.line = element_line(color = "black"),
+              panel.grid.major = element_blank(),
+              panel.grid.minor = element_blank(),
+              axis.text.x = element_blank(),
+              axis.text.y = element_blank(),
+              axis.ticks = element_blank(),
+              plot.title = element_text(hjust = 0.5)) +
+        xlim(c(1960, 2022)) +
+        ylim(c(0, 100)) +
+        labs(x = "Year", y = "Emissions", title = "Emissions by Year")
+    } else {
+      # Generate the plot with filtered data
+      ggplot(filtered_df(), aes(x = Year, y = Emissions, group = interaction(Company, Rank), color = Company)) +
+        geom_line() +
+        geom_vline(xintercept = 2015, linetype = "dashed", color = "red") +
+        annotate("text", x = 2015, y = max(filtered_df()$Emissions), label = "Paris Agreement", angle = 90, vjust = -0.5, color = "red") +
+        labs(x = "Year", y = "Emissions", title = "Emissions by Year") +
+        theme_minimal()
+    }
+  })
+  
+  
+  # Render the lineChart plot for the Individual Company Comparison tab
+output$areaChart <- renderPlotly({
+
+  processed_df$year <- as.numeric(processed_df$year)
+  
+  gp_chart <- ggplot(processed_df, aes(x = year, y = Emissions, fill = commodity, text = paste("Year:", year, "<br>Emissions:", Emissions))) + 
+    geom_area(alpha = 0.6, size = .5, colour = "white") +
+    scale_fill_viridis(discrete = TRUE) +
+    theme_minimal() +
+    theme(
+      panel.grid.major.x = element_blank(),
+      panel.grid.minor.x = element_blank(),
+      panel.grid.minor.y = element_blank(),
+      axis.line = element_line(color = "black"),
+      axis.ticks.y = element_line(color = "black"),
+      axis.text.y = element_text(hjust = 1),
+      axis.text.x = element_text(hjust = .5),
+      legend.title = element_blank()
+    ) +
+    labs(x = "", y = HTML("MtCO<sub>2</sub>e"),
+         title = HTML("State, Investor, & Nation MtCO<sub>2</sub>e Emissions <br><span style='font-size: 12px;'>
+</span>")) +
+    scale_x_continuous(breaks = c(1960, 1980, 2000, 2022)) +
+    scale_y_continuous(limits = c(0, NA), expand = c(0, 0)) +
+    labs(col = NULL)
+  
+  ggplotly(gp_chart, tooltip = "text") %>%
+    layout(legend = list(title = list(text = "")))
+  
+})
+
+  
+  
+  # Render the areaChart1 plot for the Global tab
+  output$areaChart1 <- renderPlotly({
+    df_grouped$Year <- as.numeric(df_grouped$Year)
+    
+    df_grouped$Status <- factor(df_grouped$Status, levels = c("State-Owned", "Investor-Owned", "Nation State"))
+    
+    gp1 <- ggplot(df_grouped, aes(x = Year, y = round(Emissions, 2), col = Status, group = Status,
+                                  text = paste(HTML("MtCO<sub>2</sub>e:"), round(Emissions, 2), '\nYear: ', Year))) +
+      geom_line() +
+      theme_minimal() +
+      theme(
+        panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank(),
+        panel.grid.minor.y = element_blank(),
+        axis.line = element_line(color = "black"),
+        axis.ticks.y = element_line(color = "black"),
+        axis.text.y = element_text(hjust = 1),
+        axis.text.x = element_text(hjust = .5),
+        legend.title = element_blank()
+      ) +
+      labs(x = "", y = HTML("MtCO<sub>2</sub>e"),
+           title = HTML("State, Investor, & Nation MtCO<sub>2</sub>e Emissions <br><span style='font-size: 12px;'>
+</span>")) +
+      scale_x_continuous(breaks = c(1960, 1980, 2000, 2022)) +
+      scale_color_manual(values = c("#FF6103", "#241571", "#3CB371")) +
+      scale_y_continuous(limits = c(0, NA), expand = c(0, 0)) +
+      labs(col = NULL)
+    
+    gp1
+    
+    gp <- ggplotly(gp1, tooltip = c("text"))
+    
+    gp <- layout(gp, margin = list(t = 65))
+    
+    gp
+
+  })
+  
+  # Render the investorChart1 plot for the Investor vs State Chart tab
+  output$investorChart1 <- renderPlotly({
+    gp2 <- ggplot(grouped_df, aes(x = Rank_Group, y = round(Total_Emissions/1000, 2), fill = Status,
+                                  text = paste(HTML("MtCO<sub>2</sub>e:"), round(Total_Emissions/1000, 2),
+                                               '\nNumber of Companies: ', Company_Count))) +
+      geom_bar(stat = "identity", position = "dodge") +
+      theme_minimal() +
+      theme(
+        panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank(),
+        panel.grid.minor.y = element_blank(),
+        axis.line = element_line(colour = "black", size = 0.5)
+      ) +
+      scale_y_continuous(limits = c(0, 15), expand = c(0, 0)) +
+      scale_fill_manual(values = c("#241571", "#FF6103", "#3CB371")) +
+      labs(x = "Category", y = HTML("MtCO<sub>2</sub>e"), title = HTML("MtCO<sub>2</sub>e by
+Category"), fill = NULL)
+    
+    ggplotly(gp2, tooltip = c("text"))
+  })
+  
+  # Render the investorChart2 plot for the Investor vs State Chart tab
+  output$investorChart2 <- renderPlotly({
+    gp3 <- ggplot(investor_count, aes(x = Rank_Group, y = Count, fill = value_change.y, text = paste("Number: ",
+                                                                                           Count))) +
+      geom_bar(stat = "identity", position = "dodge") +
+      labs(x = "Category", y = "Company Number", fill = "") +
+      theme_minimal() +
+      theme(
+        panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank(),
+        panel.grid.minor.y = element_blank(),
+        axis.title.y = element_text(size = 8),
+        axis.title.x = element_text(size = 8),
+        axis.line = element_line(colour = "black", size = 0.5)
+      ) +
+      scale_y_continuous(limits = c(0, 20), expand = c(0, 0)) +
+      scale_fill_manual(values = c("#40e0d0", "#191970")) +
+      labs(title = HTML("Investor MtCO<sub>2</sub>e"), subtitle = "Decrease vs. Increase")
+    
+    ggplotly(gp3, tooltip = "text")
+    
+  })
+  
+  # Render the investorChart3 plot for the Investor vs State Chart tab
+  output$investorChart3 <- renderPlotly({
+    gp4 <- ggplot(investor_count, aes(x = Rank_Group, y = Count, fill = value_change.y, text = paste("Number: ",
+                                                                                                     Count))) +
+      geom_bar(stat = "identity", position = "dodge") +
+      theme_minimal() +
+      theme(
+        panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank(),
+        panel.grid.minor.y = element_blank(),
+        axis.line = element_line(colour = "black", size = 0.5),
+        axis.title.y = element_text(size = 8),
+        axis.title.x = element_text(size = 8)
+        
+      ) +
+      scale_y_continuous(limits = c(0, 20), expand = c(0, 0)) +
+      scale_fill_manual(values =c("#40e0d0", "#191970")) +
+      labs(x = "Category", y = "Company Number", title = HTML("State MtCO<sub>2</sub>e"))
+    
+    ggplotly(gp4, tooltip = "text") %>%
+      layout(legend = list(title = list(text = "")))
+  })
+  
+  # Render the investorChart4 plot for the Investor vs State Chart tab
+  output$investorChart4 <- renderPlotly({
+    gp4 <- ggplot(nation_count, aes(x = Rank_Group, y = Count, fill = value_change.y, text = paste("Number: ",
+                                                                                                     Count))) +
+      geom_bar(stat = "identity", position = "dodge") +
+      theme_minimal() +
+      theme(
+        panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank(),
+        panel.grid.minor.y = element_blank(),
+        axis.line = element_line(colour = "black", size = 0.5),
+        axis.title.y = element_text(size = 8),
+        axis.title.x = element_text(size = 8)
+        
+      ) +
+      scale_y_continuous(limits = c(0, 20), expand = c(0, 0)) +
+      scale_fill_manual(values =c("#40e0d0", "#191970")) +
+      labs(x = "Category", y = "Company Number", title = HTML("Nation MtCO<sub>2</sub>e"))
+    
+    ggplotly(gp4, tooltip = "text") %>%
+      layout(legend = list(title = list(text = "")))
+  })
+  
+  
+}
+
+# Run the Shiny App
+shinyApp(ui = ui, server = server)
