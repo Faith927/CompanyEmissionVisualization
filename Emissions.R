@@ -202,8 +202,8 @@ ui <- dashboardPage(
   dashboardHeader(title = HTML("Breakdown of MtCO<sub>2</sub>e")),
   dashboardSidebar(
     sidebarMenu(
-      menuItem("Overview", tabName = "global", icon = icon("area-chart")),
-      menuItem("Highest Company MtCO<sub>2</sub>e Emitting Comparison", tabName = "investorstate", icon = icon("area-chart")),
+      menuItem("Emission Overview", tabName = "global", icon = icon("area-chart")),
+      menuItem("Company Comparison", tabName = "investorstate", icon = icon("area-chart")),
       menuItem("Individual Company Comparison ", tabName = "linechart", icon = icon("line-chart"))
     )
   ),
@@ -213,17 +213,17 @@ ui <- dashboardPage(
       tabItem(tabName = "global",
               fluidRow(
                 infoBox(
-                  "Top 122 Companies Represent", "72%", HTML("of the world's MtCO<sub>2</sub>e"), icon
+                  "Top 122 Companies CO2 portion equivalent to", "72%", HTML("of global fossil fuel and cement CO2 emissions since 1751"), icon
                   = icon("exclamation-circle"),
                   fill = TRUE
                 ),
                 infoBox(
-                  "Global Emissions Reached", HTML("38 MtCO<sub>2</sub>e"), "in 2015", icon =
+                  "Over", HTML("70%"), "of these global CO2 emissions historcally can be attributed to just 78 corporate and state companies", icon =
                     icon("tree"), color = "blue",
                   fill = TRUE
                 ),
                 infoBox(
-                  HTML("MtCO<sub>2</sub>e refers to"), "Gigatonnes", "of Carbon Dioxide", icon =
+                  HTML("MtCO<sub>2</sub>e refers to"), "Metric tons", "of carbon dioxide equivalent", icon =
                     icon("info"), color = "teal",
                   fill = TRUE
                 )
@@ -235,30 +235,83 @@ ui <- dashboardPage(
                 column(width = 6,
                        plotlyOutput("areaChart1")
                 )
-              )
-      ),
+              ),
+              # tags$br(), # add space
+              # tags$br(),
+              # tags$br(),
+              # tags$br(),
+              # fluidRow(
+              #   box(
+              #     title = "Overview", width = 4, solidHeader = TRUE, status = "primary",
+              #     HTML("Year after year, we witness a steady rise in global emissions, 
+              #     intensifying worries about global warming and the impact of emissions on the environment. 
+              #     Almost every prominent company has made a pledge towards achieving net zero emissions
+              #     or lessening its impact on the environemnt, 
+              #          but the sincerity of these commitments is often questioned. 
+              #          This dashboard is designed to provide a visual representation of the CO<sub>2</sub> emissions 
+              #          (measured in MtCO<sub>2</sub>e) of the 122 largest companies, 
+              #          as identified by the Carbon Majors Database.")
+              #   ),
+              # 
+              # )
+              # 
+    
+      
+    
+  ),
+             
       # Investor vs State Chart tab
       tabItem(tabName = "investorstate",
               fluidRow(
                 infoBox(
-                  "Top 25 Companies represent", "51%", HTML("of the world's MtCO<sub>2</sub>e"), icon =
+                  "Emission Decrease was calculated by emission decrease since the",
+                  "Paris Agreement", "in 2015.
+                  If a company is no longer around or was started after 2015, the decrease or increase was calculated
+                  by last year minus first year.", icon =
                     icon("cloud"),
-                  fill = TRUE
+                  fill = TRUE, width = 3
                   
                 ),
                 infoBox(
-                  "State Companies", "Increasing", HTML("MtCO<sub>2</sub>e in All Categories"), icon =
-                    icon("angle-double-up"), color = "blue",
-                  fill = TRUE
+                  "71 Investor-owned Companies account for", "31% or 440 GtCO₂e", HTML("traced by the database
+                                                                      Three largest companies:
+                                                                           <ul>
+                                                                           <li>Chevron</li>
+                                                                           <li>ExxonMobil</li>
+                                                                           <li>BP</li>
+                                                                           </ul>
+                                                                  "), icon =
+                    icon("cloud"),
+                  fill = TRUE, width = 3
+                  
                 ),
                 infoBox(
-                  "Top Investor Companies Most", "Likely to Decrease", HTML("MtCO<sub>2</sub>e"), icon =
+                  "35 State Companies account for", "33% or 465 GtCO₂e ", HTML("traced by the database. 3 Largest contributers:
+                                                             <ul>
+                                                                           <li>Saudi Aramco</li>
+                                                                           <li>Gazprom</li>
+                                                                           <li>National Iranian Oil Company</li>
+                                                                           </ul>"
+                                                                            ), icon =
+                    icon("angle-double-up"), color = "blue",
+                  fill = TRUE, width = 3
+                ),
+                infoBox(
+                   "8 Nation State Companies account for", "36% or 516 GtCO₂e", HTML("traced by the database. Largest contributers:
+                                                             <ul>
+                                                                           <li>China's coal production</li>
+                                                                           <li>Former Soviet Union</li>
+                                                                           </ul>
+                                                                        
+                                                                                     "
+                   ),
+            
                     icon("angle-double-down"), color = "teal",
-                  fill = TRUE
+                  fill = TRUE, width = 3
                 ),
               ),
               fluidRow(
-                column(6, box(width = 12, plotlyOutput("investorChart1", height = 500))),
+                column(6, box(width = 12, plotlyOutput("investorChart1", height = 610))),
                 column(6,
                        box(width = 12, plotlyOutput("investorChart2", height = 175)),
                        box(width = 12, plotlyOutput("investorChart3", height = 175)),
