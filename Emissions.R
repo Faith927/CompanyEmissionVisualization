@@ -53,19 +53,21 @@ company_emissions <- df %>%
 df <- df %>%
   left_join(company_emissions %>% select(Company, Rank), by = "Company")
 
-# Helper function to compute value change based on available data
 compute_value_change <- function(emissions, years) {
-  # Check if the years 2015 or 2022 are present
-  if (any(years %in% c(2015, 2022))) {
-    # Find the emissions value for the earliest available year
-    first_year <- min(years)
+  # Check if 2015 and 2022 are present
+  has_2015 <- 2015 %in% years
+  has_2022 <- 2022 %in% years
+  
+  # Find the earliest and latest available years
+  first_year <- min(years)
+  last_year <- max(years)
+  
+  if (has_2015 && emissions[years == 2015] < emissions[years == last_year]) {
+    return("Increased")
+  } else if (!has_2015 || !has_2022) {
     first_year_value <- emissions[years == first_year]
-    
-    # Find the emissions value for the latest available year
-    last_year <- max(years)
     last_year_value <- emissions[years == last_year]
     
-    # Compare the emissions values
     if (last_year_value > first_year_value) {
       return("Increased")
     } else if (last_year_value < first_year_value) {
@@ -74,7 +76,7 @@ compute_value_change <- function(emissions, years) {
       return("No Change")
     }
   } else {
-    return(NA)  # Return NA if neither 2015 nor 2022 are present
+    return("Decreased")
   }
 }
 
@@ -116,6 +118,7 @@ grouped_df <- left_join(grouped_df, company_counts, by = c("Rank_Group", "Status
 count <- merge(filtered_df, df_change, by = c("Company", "Status", "Rank", "Year", "Emissions"))
 
 
+
 company_count <- count %>%
   filter(Status %in% c("Investor-Owned", "State-Owned", "Nation State") & value_change.y %in% c("Increased", "Decreased")) %>%
   group_by(Rank_Group, Status, value_change.y) %>%
@@ -148,48 +151,50 @@ processed_df <- df_global %>%
 processed_df$year <- as.numeric(processed_df$year)
 
 
-ggplot(processed_df, aes(x=year, y=Emissions, fill=commodity)) + 
-  geom_area(alpha=0.6 , size=.5, colour="white") +
-  scale_fill_viridis(discrete = T) +
-  theme_minimal() +
-  theme(
-    panel.grid.major.x = element_blank(),
-    panel.grid.minor.x = element_blank(),
-    panel.grid.minor.y = element_blank(),
-    axis.line = element_line(color = "black"),
-    axis.ticks.y = element_line(color = "black"),
-    axis.text.y = element_text(hjust = 1),
-    axis.text.x = element_text(hjust = .5),
-    legend.title = element_blank()
-  ) +
-  labs(x = "", y = HTML("MtCO<sub>2</sub>e"),
-       title = HTML("State, Investor, & Nation MtCO<sub>2</sub>e Emissions <br><span style='font-size: 12px;'>
-</span>")) +
-  scale_x_continuous(breaks = c(1960, 1980, 2000, 2022)) +
-  scale_y_continuous(limits = c(0, NA), expand = c(0, 0)) +
-  labs(col = NULL)
+# ggplot(processed_df, aes(x=year, y=Emissions, fill=commodity)) +
+#   geom_area(alpha=0.6 , size=.5, colour="white") +
+#   scale_fill_viridis(discrete = T) +
+#   theme_minimal() +
+#   theme(
+#     panel.grid.major.x = element_blank(),
+#     panel.grid.minor.x = element_blank(),
+#     panel.grid.minor.y = element_blank(),
+#     axis.line = element_line(color = "black"),
+#     axis.ticks.y = element_line(color = "black"),
+#     axis.text.y = element_text(hjust = 1),
+#     axis.text.x = element_text(hjust = .5),
+#     legend.title = element_blank()
+#   ) +
+#   labs(x = "", y = HTML("MtCO<sub>2</sub>e"),
+#        title = HTML("State, Investor, & Nation MtCO<sub>2</sub>e Emissions <br><span style='font-size: 12px;'>
+# </span>")) +
+#   scale_x_continuous(breaks = c(1960, 1980, 2000, 2022)) +
+#   scale_y_continuous(limits = c(0, NA), expand = c(0, 0)) +
+#   labs(col = NULL)
 
-p <- ggplot(processed_df, aes(x=year, y=Emissions, fill=commodity)) + 
-  geom_area(alpha=0.6 , size=.5, colour="white") +
-  scale_fill_viridis(discrete = T) +
-  theme_minimal() +
-  theme(
-    panel.grid.major.x = element_blank(),
-    panel.grid.minor.x = element_blank(),
-    panel.grid.minor.y = element_blank(),
-    axis.line = element_line(color = "black"),
-    axis.ticks.y = element_line(color = "black"),
-    axis.text.y = element_text(hjust = 1),
-    axis.text.x = element_text(hjust = .5),
-    legend.title = element_blank()
-  ) +
-  labs(x = "", y = "MtCO<sub>2</sub>e",
-       title = "State, Investor, & Nation MtCO<sub>2</sub>e Emissions") +
-  scale_x_continuous(breaks = c(1960, 1980, 2000, 2022)) +
-  scale_y_continuous(limits = c(0, NA), expand = c(0, 0)) +
-  labs(col = NULL)
+# p <- ggplot(processed_df, aes(x=year, y=Emissions, fill=commodity)) +
+#   geom_area(alpha=0.6 , size=.5, colour="white") +
+#   scale_fill_viridis(discrete = T) +
+#   theme_minimal() +
+#   theme(
+#     panel.grid.major.x = element_blank(),
+#     panel.grid.minor.x = element_blank(),
+#     panel.grid.minor.y = element_blank(),
+#     axis.line = element_line(color = "black"),
+#     axis.ticks.y = element_line(color = "black"),
+#     axis.text.y = element_text(hjust = 1),
+#     axis.text.x = element_text(hjust = .5),
+#     legend.title = element_blank()
+#   ) +
+#   labs(x = "", y = "MtCO<sub>2</sub>e",
+#        title = "State, Investor, & Nation MtCO<sub>2</sub>e Emissions") +
+#   scale_x_continuous(breaks = c(1960, 1980, 2000, 2022), expand = c(0, 0)) + # Adjusted here
+#   scale_y_continuous(limits = c(0, NA), expand = c(0, 0)) +
+#   labs(col = NULL)
+# 
+# ggplotly(p)
 
-ggplotly(p)
+
 ############
 
 # UI
@@ -404,9 +409,9 @@ output$areaChart <- renderPlotly({
 
   processed_df$year <- as.numeric(processed_df$year)
   
-  gp_chart <- ggplot(processed_df, aes(x = year, y = Emissions, fill = commodity, text = paste("Year:", year, "<br>Emissions:", Emissions))) + 
-    geom_area(alpha = 0.6, size = .5, colour = "white") +
-    scale_fill_viridis(discrete = TRUE) +
+  emissions_chart <- ggplot(processed_df, aes(x=year, y=Emissions, fill=commodity)) +
+    geom_area(alpha=0.6 , size=.5, colour="white") +
+    scale_fill_viridis(discrete = T) +
     theme_minimal() +
     theme(
       panel.grid.major.x = element_blank(),
@@ -418,15 +423,18 @@ output$areaChart <- renderPlotly({
       axis.text.x = element_text(hjust = .5),
       legend.title = element_blank()
     ) +
-    labs(x = "", y = HTML("MtCO<sub>2</sub>e"),
-         title = HTML("State, Investor, & Nation MtCO<sub>2</sub>e Emissions <br><span style='font-size: 12px;'>
-</span>")) +
-    scale_x_continuous(breaks = c(1960, 1980, 2000, 2022)) +
+    labs(x = "", y = "MtCO<sub>2</sub>e",
+         title = "Combined MtCO<sub>2</sub>e Emissions by Commodity") +
+    scale_x_continuous(breaks = c(1960, 1980, 2000, 2022), expand = c(0, 0)) + # Adjusted here
     scale_y_continuous(limits = c(0, NA), expand = c(0, 0)) +
     labs(col = NULL)
   
-  ggplotly(gp_chart, tooltip = "text") %>%
-    layout(legend = list(title = list(text = "")))
+  p1 <- ggplotly(emissions_chart)
+
+  p1 <- layout(p1, margin = list(t = 65))
+  
+  p1
+  
   
 })
 
@@ -493,7 +501,7 @@ Category"), fill = NULL)
   
   # Render the investorChart2 plot for the Investor vs State Chart tab
   output$investorChart2 <- renderPlotly({
-    gp3 <- ggplot(investor_count, aes(x = Rank_Group, y = Count, fill = value_change.y, text = paste("Number: ",
+    gp3 <- ggplot(state_count, aes(x = Rank_Group, y = Count, fill = value_change.y, text = paste("Number: ",
                                                                                            Count))) +
       geom_bar(stat = "identity", position = "dodge") +
       labs(x = "Category", y = "Company Number", fill = "") +
