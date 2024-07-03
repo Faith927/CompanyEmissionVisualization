@@ -19,14 +19,14 @@ names(df)[names(df) == "parent_entity"] <- "Company"
 names(df)[names(df) == "parent_type"] <- "Status"
 names(df)[names(df) == "year"] <- "Year"
 names(df)[names(df) == "total_emissions_MtCO2e"] <- "Emissions"
+names(df_emissions)[names(df_emissions) == "total_emissions_MtCO2e"] <- "Emissions"
 
+# rename names in Status column
 df <- df %>% 
   mutate(Status = recode(Status,  "State-owned Entity" = "State-Owned", 
                          "Investor-owned Company" = "Investor-Owned"))
 
-names(df_emissions)[names(df_emissions) == "total_emissions_MtCO2e"] <- "Emissions"
-
-
+# convert emissions to numeric format
 df_emissions$Emissions <- as.numeric(as.character(df_emissions$Emissions))
 
 # coal, gas, ect.
@@ -35,6 +35,7 @@ df_global <- df_emissions %>%
   group_by(commodity, year) %>%
   summarize(Emissions = sum(Emissions, na.rm = TRUE))
 
+# group all coal names together
 processed_df <- df_global %>%
   mutate(commodity = ifelse(grepl("Coal$", commodity), "Coal", commodity)) %>%
   group_by(year, commodity) %>%
@@ -108,8 +109,6 @@ company_count <- count %>%
   group_by(Rank_Group, Status, value_change.y) %>%
   summarise(Count = n_distinct(Company))
 
-
-# 
 investor_count <- company_count %>%
   filter(Status == "Investor-Owned")
 
@@ -172,27 +171,6 @@ ui <- dashboardPage(
                        plotlyOutput("areaChart1")
                 )
               ),
-              # tags$br(), # add space
-              # tags$br(),
-              # tags$br(),
-              # tags$br(),
-              # fluidRow(
-              #   box(
-              #     title = "Overview", width = 4, solidHeader = TRUE, status = "primary",
-              #     HTML("Year after year, we witness a steady rise in global emissions, 
-              #     intensifying worries about global warming and the impact of emissions on the environment. 
-              #     Almost every prominent company has made a pledge towards achieving net zero emissions
-              #     or lessening its impact on the environemnt, 
-              #          but the sincerity of these commitments is often questioned. 
-              #          This dashboard is designed to provide a visual representation of the CO<sub>2</sub> emissions 
-              #          (measured in MtCO<sub>2</sub>e) of the 122 largest companies, 
-              #          as identified by the Carbon Majors Database.")
-              #   ),
-              # 
-              # )
-              # 
-    
-      
     
   ),
              
@@ -200,22 +178,24 @@ ui <- dashboardPage(
       tabItem(tabName = "investorstate",
               fluidRow(
                 infoBox(
-                  "Emission Decrease was calculated by emission decrease since the",
+                  "Emission Decrease/Increase calculated",
                   "Paris Agreement", "in 2015.
-                  If a company is no longer around or was started after 2015, the decrease or increase was calculated
-                  by last year minus first year.", icon =
-                    icon("cloud"),
-                  fill = TRUE, width = 3
-                  
+                  If a company was started after 2015, or ended before 2015, the decrease or increase was calculated
+                  by minusing the first year and last year." 
+                                          , icon =
+                    icon("calculator"),
+                  fill = TRUE, width = 3, color = "olive",
+
                 ),
                 infoBox(
-                  "71 Investor-owned Companies account for", "31% or 440 GtCO₂e", HTML("traced by the database
-                                                                      Three largest companies:
+                  "75 Investor-owned Companies account for", "31% or 440 GtCO₂e", HTML("traced by the databas.
+                                                                      3 largest companies:
                                                                            <ul>
                                                                            <li>Chevron</li>
                                                                            <li>ExxonMobil</li>
                                                                            <li>BP</li>
                                                                            </ul>
+                                                                        
                                                                   "), icon =
                     icon("cloud"),
                   fill = TRUE, width = 3
@@ -233,16 +213,18 @@ ui <- dashboardPage(
                   fill = TRUE, width = 3
                 ),
                 infoBox(
-                   "8 Nation State Companies account for", "36% or 516 GtCO₂e", HTML("traced by the database. Largest contributers:
+                   "11 Nation State Companies account for", "36% or 516 GtCO₂e", HTML("traced by the database. Largest contributers:
                                                              <ul>
                                                                            <li>China's coal production</li>
                                                                            <li>Former Soviet Union</li>
+                                                                           <li>China Cement Production</li>
+
+                                                                           
                                                                            </ul>
-                                                                        
                                                                                      "
                    ),
             
-                    icon("angle-double-down"), color = "teal",
+                    icon("exclamation-circle"), color = "teal",
                   fill = TRUE, width = 3
                 ),
               ),
@@ -267,7 +249,7 @@ ui <- dashboardPage(
                   fill = TRUE
                 ),
                 infoBox(
-                  "State Companies", "Key to Reducing", HTML("Global MtCO<sub>2</sub>e"), icon =
+                  "State and Nation Companies", "Key to Reducing", HTML("Global MtCO<sub>2</sub>e"), icon =
                     icon("exclamation-circle"), color = "teal",
                   fill = TRUE
                 )
@@ -288,12 +270,12 @@ ui <- dashboardPage(
                       tags$p("Data Reference:"),
                       tags$ul(
                         tags$li(
-                          "Paul, G., Heede, R., & Vlugt, I. (2017).",
+                          "Paul, G., Heede, R., & Vlugt, I. (2024).",
                           tags$em("Climate Accountability Institute"),
                           ". Climate Accountability Institute .",
                           tags$a(
                             href = "https://climateaccountability.org/publications.html",
-                            "https://climateaccountability.org/publications.html"
+                            "https://carbonmajors.org/Downloads"
                           )
                         )
                       )
@@ -378,17 +360,28 @@ server <- function(input, output, session) {
               axis.text.y = element_blank(),
               axis.ticks = element_blank(),
               plot.title = element_text(hjust = 0.5)) +
-        xlim(c(1960, 2022)) +
+        xlim(c(1850, 2022)) +
         ylim(c(0, 100)) +
         labs(x = "Year", y = "Emissions", title = "Emissions by Year")
     } else {
+      max_emissions <- max(filtered_df()$Emissions, na.rm = TRUE)
+      annotation_y <- max_emissions * 1.1 # Adjust the multiplier as needed to position higher
+      
       # Generate the plot with filtered data
-      ggplot(filtered_df(), aes(x = Year, y = Emissions, group = interaction(Company, Rank), color = Company)) +
+      gp <- ggplot(filtered_df(), aes(x = Year, y = Emissions, group = interaction(Company, Rank), color = Company, 
+                                      text = paste("Year: ", Year, "<br> Company: ", Company, "<br> MtCO₂e: ", round(Emissions, 2), "<br> Rank: ", Rank, "<br>Status: ", Status))) +
         geom_line() +
         geom_vline(xintercept = 2015, linetype = "dashed", color = "red") +
-        annotate("text", x = 2015, y = max(filtered_df()$Emissions), label = "Paris Agreement", angle = 90, vjust = -0.5, color = "red") +
-        labs(x = "Year", y = "Emissions", title = "Emissions by Year") +
+        annotate("text", x = 2015, y = annotation_y, label = "Paris Agreement", angle = 90, vjust = -0.1, color = "red") +
+        labs(x = "Year", y = "MtCO₂e", title = "Emissions by Year") +
         theme_minimal()
+      
+      gp1 <- ggplotly(gp, tooltip = c("text"))
+      
+      gp1 <- layout(gp1, margin = list(t = 65))
+      
+      gp1
+      
     }
   })
   
