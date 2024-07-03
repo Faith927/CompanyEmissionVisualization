@@ -80,50 +80,36 @@ compute_value_change <- function(emissions, years) {
   }
 }
 
-
-
-# Example of applying this within mutate
-df_change <- df %>%
-  group_by(Company) %>%
-  mutate(value_change = compute_value_change(Emissions, Year))
-
-
-# # Apply the helper function within mutate
-# df3 <- df2 %>%
-#   group_by(Company) %>%
-#   mutate(value_change = compute_value_change(Emissions, Year))
-
-filtered_df <- df_change %>% filter(Year == 2022)
-
+filtered_df <- df_change
 filtered_df$Rank_Group <- cut(filtered_df$Rank, 
                               breaks = c(0, 25, 50, 75, 100, 125), 
                               labels = c("1-25", "26-50", "51-75", "76-100", "101-125"), 
                               include.lowest = TRUE)
 
-
+# Summarizing total emissions by Rank_Group and Status
 grouped_df <- filtered_df %>%
   group_by(Rank_Group, Status) %>%
-  summarise(Total_Emissions = sum(Emissions))
+  summarise(Total_Emissions = sum(Emissions, na.rm = TRUE))
 
-
+# Counting distinct companies by Rank_Group and Status
 company_counts <- filtered_df %>%
-  filter(Year == 2022) %>%
   group_by(Rank_Group, Status) %>%
-  summarise(Company_Count = n())
+  summarise(Company_Count = n_distinct(Company))
 
-
+# Joining the two summaries
 grouped_df <- left_join(grouped_df, company_counts, by = c("Rank_Group", "Status"))
-# df2$Year <- as.numeric(df2$Year)
 
+# Merging dataframes
 count <- merge(filtered_df, df_change, by = c("Company", "Status", "Rank", "Year", "Emissions"))
 
-
-
+# Summarizing the count of companies with 'Increased' or 'Decreased' value_change.y
 company_count <- count %>%
   filter(Status %in% c("Investor-Owned", "State-Owned", "Nation State") & value_change.y %in% c("Increased", "Decreased")) %>%
   group_by(Rank_Group, Status, value_change.y) %>%
-  summarise(Count = n())
+  summarise(Count = n_distinct(Company))
 
+
+# 
 investor_count <- company_count %>%
   filter(Status == "Investor-Owned")
 
@@ -143,56 +129,6 @@ df_global <- df_emissions %>%
   group_by(commodity, year) %>%
   summarize(Emissions = sum(Emissions, na.rm = TRUE))
 
-processed_df <- df_global %>%
-  mutate(commodity = ifelse(grepl("Coal$", commodity), "Coal", commodity)) %>%
-  group_by(year, commodity) %>%
-  summarize(Emissions = sum(as.numeric(Emissions), na.rm = TRUE), .groups = 'drop')
-
-processed_df$year <- as.numeric(processed_df$year)
-
-
-# ggplot(processed_df, aes(x=year, y=Emissions, fill=commodity)) +
-#   geom_area(alpha=0.6 , size=.5, colour="white") +
-#   scale_fill_viridis(discrete = T) +
-#   theme_minimal() +
-#   theme(
-#     panel.grid.major.x = element_blank(),
-#     panel.grid.minor.x = element_blank(),
-#     panel.grid.minor.y = element_blank(),
-#     axis.line = element_line(color = "black"),
-#     axis.ticks.y = element_line(color = "black"),
-#     axis.text.y = element_text(hjust = 1),
-#     axis.text.x = element_text(hjust = .5),
-#     legend.title = element_blank()
-#   ) +
-#   labs(x = "", y = HTML("MtCO<sub>2</sub>e"),
-#        title = HTML("State, Investor, & Nation MtCO<sub>2</sub>e Emissions <br><span style='font-size: 12px;'>
-# </span>")) +
-#   scale_x_continuous(breaks = c(1960, 1980, 2000, 2022)) +
-#   scale_y_continuous(limits = c(0, NA), expand = c(0, 0)) +
-#   labs(col = NULL)
-
-# p <- ggplot(processed_df, aes(x=year, y=Emissions, fill=commodity)) +
-#   geom_area(alpha=0.6 , size=.5, colour="white") +
-#   scale_fill_viridis(discrete = T) +
-#   theme_minimal() +
-#   theme(
-#     panel.grid.major.x = element_blank(),
-#     panel.grid.minor.x = element_blank(),
-#     panel.grid.minor.y = element_blank(),
-#     axis.line = element_line(color = "black"),
-#     axis.ticks.y = element_line(color = "black"),
-#     axis.text.y = element_text(hjust = 1),
-#     axis.text.x = element_text(hjust = .5),
-#     legend.title = element_blank()
-#   ) +
-#   labs(x = "", y = "MtCO<sub>2</sub>e",
-#        title = "State, Investor, & Nation MtCO<sub>2</sub>e Emissions") +
-#   scale_x_continuous(breaks = c(1960, 1980, 2000, 2022), expand = c(0, 0)) + # Adjusted here
-#   scale_y_continuous(limits = c(0, NA), expand = c(0, 0)) +
-#   labs(col = NULL)
-# 
-# ggplotly(p)
 
 
 ############
@@ -202,8 +138,8 @@ ui <- dashboardPage(
   dashboardHeader(title = HTML("Breakdown of MtCO<sub>2</sub>e")),
   dashboardSidebar(
     sidebarMenu(
-      menuItem("Overview", tabName = "global", icon = icon("area-chart")),
-      menuItem("Highest Company MtCO<sub>2</sub>e Emitting Comparison", tabName = "investorstate", icon = icon("area-chart")),
+      menuItem("Emission Overview", tabName = "global", icon = icon("area-chart")),
+      menuItem("Company Comparison", tabName = "investorstate", icon = icon("area-chart")),
       menuItem("Individual Company Comparison ", tabName = "linechart", icon = icon("line-chart"))
     )
   ),
@@ -213,17 +149,17 @@ ui <- dashboardPage(
       tabItem(tabName = "global",
               fluidRow(
                 infoBox(
-                  "Top 122 Companies Represent", "72%", HTML("of the world's MtCO<sub>2</sub>e"), icon
+                  "Top 122 Companies CO2 portion equivalent to", "72%", HTML("of global fossil fuel and cement CO2 emissions since 1751 <br> <br>"), icon
                   = icon("exclamation-circle"),
                   fill = TRUE
                 ),
                 infoBox(
-                  "Global Emissions Reached", HTML("38 MtCO<sub>2</sub>e"), "in 2015", icon =
+                  "Over", HTML("70%"), "of these global CO2 emissions traced by the database historcally can be attributed to just 78 corporate and state companies", icon =
                     icon("tree"), color = "blue",
                   fill = TRUE
                 ),
                 infoBox(
-                  HTML("MtCO<sub>2</sub>e refers to"), "Gigatonnes", "of Carbon Dioxide", icon =
+                  HTML("MtCO<sub>2</sub>e refers to"), "Metric tons",  HTML("of carbon dioxide equivalent <br> <br>"), icon =
                     icon("info"), color = "teal",
                   fill = TRUE
                 )
@@ -235,30 +171,83 @@ ui <- dashboardPage(
                 column(width = 6,
                        plotlyOutput("areaChart1")
                 )
-              )
-      ),
+              ),
+              # tags$br(), # add space
+              # tags$br(),
+              # tags$br(),
+              # tags$br(),
+              # fluidRow(
+              #   box(
+              #     title = "Overview", width = 4, solidHeader = TRUE, status = "primary",
+              #     HTML("Year after year, we witness a steady rise in global emissions, 
+              #     intensifying worries about global warming and the impact of emissions on the environment. 
+              #     Almost every prominent company has made a pledge towards achieving net zero emissions
+              #     or lessening its impact on the environemnt, 
+              #          but the sincerity of these commitments is often questioned. 
+              #          This dashboard is designed to provide a visual representation of the CO<sub>2</sub> emissions 
+              #          (measured in MtCO<sub>2</sub>e) of the 122 largest companies, 
+              #          as identified by the Carbon Majors Database.")
+              #   ),
+              # 
+              # )
+              # 
+    
+      
+    
+  ),
+             
       # Investor vs State Chart tab
       tabItem(tabName = "investorstate",
               fluidRow(
                 infoBox(
-                  "Top 25 Companies represent", "51%", HTML("of the world's MtCO<sub>2</sub>e"), icon =
+                  "Emission Decrease was calculated by emission decrease since the",
+                  "Paris Agreement", "in 2015.
+                  If a company is no longer around or was started after 2015, the decrease or increase was calculated
+                  by last year minus first year.", icon =
                     icon("cloud"),
-                  fill = TRUE
+                  fill = TRUE, width = 3
                   
                 ),
                 infoBox(
-                  "State Companies", "Increasing", HTML("MtCO<sub>2</sub>e in All Categories"), icon =
-                    icon("angle-double-up"), color = "blue",
-                  fill = TRUE
+                  "71 Investor-owned Companies account for", "31% or 440 GtCO₂e", HTML("traced by the database
+                                                                      Three largest companies:
+                                                                           <ul>
+                                                                           <li>Chevron</li>
+                                                                           <li>ExxonMobil</li>
+                                                                           <li>BP</li>
+                                                                           </ul>
+                                                                  "), icon =
+                    icon("cloud"),
+                  fill = TRUE, width = 3
+                  
                 ),
                 infoBox(
-                  "Top Investor Companies Most", "Likely to Decrease", HTML("MtCO<sub>2</sub>e"), icon =
+                  "35 State Companies account for", "33% or 465 GtCO₂e ", HTML("traced by the database. 3 Largest contributers:
+                                                             <ul>
+                                                                           <li>Saudi Aramco</li>
+                                                                           <li>Gazprom</li>
+                                                                           <li>National Iranian Oil Company</li>
+                                                                           </ul>"
+                                                                            ), icon =
+                    icon("angle-double-up"), color = "blue",
+                  fill = TRUE, width = 3
+                ),
+                infoBox(
+                   "8 Nation State Companies account for", "36% or 516 GtCO₂e", HTML("traced by the database. Largest contributers:
+                                                             <ul>
+                                                                           <li>China's coal production</li>
+                                                                           <li>Former Soviet Union</li>
+                                                                           </ul>
+                                                                        
+                                                                                     "
+                   ),
+            
                     icon("angle-double-down"), color = "teal",
-                  fill = TRUE
+                  fill = TRUE, width = 3
                 ),
               ),
               fluidRow(
-                column(6, box(width = 12, plotlyOutput("investorChart1", height = 500))),
+                column(6, box(width = 12, plotlyOutput("investorChart1", height = 610))),
                 column(6,
                        box(width = 12, plotlyOutput("investorChart2", height = 175)),
                        box(width = 12, plotlyOutput("investorChart3", height = 175)),
@@ -464,7 +453,7 @@ output$areaChart <- renderPlotly({
            title = HTML("State, Investor, & Nation MtCO<sub>2</sub>e Emissions <br><span style='font-size: 12px;'>
 </span>")) +
       scale_x_continuous(breaks = c(1960, 1980, 2000, 2022)) +
-      scale_color_manual(values = c("#FF6103", "#241571", "#3CB371")) +
+      scale_color_manual(values = c("#E95C20FF", "#006747FF", "#4F2C1DFF")) +
       scale_y_continuous(limits = c(0, NA), expand = c(0, 0)) +
       labs(col = NULL)
     
@@ -481,7 +470,7 @@ output$areaChart <- renderPlotly({
   # Render the investorChart1 plot for the Investor vs State Chart tab
   output$investorChart1 <- renderPlotly({
     gp2 <- ggplot(grouped_df, aes(x = Rank_Group, y = round(Total_Emissions/1000, 2), fill = Status,
-                                  text = paste(HTML("MtCO<sub>2</sub>e:"), round(Total_Emissions/1000, 2),
+                                  text = paste(HTML("GtCO<sub>2</sub>e:"), round(Total_Emissions/1000, 2),
                                                '\nNumber of Companies: ', Company_Count))) +
       geom_bar(stat = "identity", position = "dodge") +
       theme_minimal() +
@@ -491,9 +480,9 @@ output$areaChart <- renderPlotly({
         panel.grid.minor.y = element_blank(),
         axis.line = element_line(colour = "black", size = 0.5)
       ) +
-      scale_y_continuous(limits = c(0, 15), expand = c(0, 0)) +
-      scale_fill_manual(values = c("#241571", "#FF6103", "#3CB371")) +
-      labs(x = "Category", y = HTML("MtCO<sub>2</sub>e"), title = HTML("MtCO<sub>2</sub>e by
+      scale_y_continuous(limits = c(0, 500), expand = c(0, 0)) +
+      scale_fill_manual(values = c("#95DBE5FF", "#078282FF", "#339E66FF")) +
+      labs(x = "Category", y = HTML("GtCO<sub>2</sub>e"), title = HTML("GtCO<sub>2</sub>e by
 Category"), fill = NULL)
     
     ggplotly(gp2, tooltip = c("text"))
