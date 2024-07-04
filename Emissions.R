@@ -1,4 +1,5 @@
 rm(list=ls())
+
 library(shiny)
 library(shinydashboard)
 library(ggplot2)
@@ -80,6 +81,10 @@ compute_value_change <- function(emissions, years) {
     return("Decreased")
   }
 }
+
+df_change <- df %>%
+  group_by(Company) %>%
+  mutate(value_change = compute_value_change(Emissions, Year))
 
 filtered_df <- df_change
 filtered_df$Rank_Group <- cut(filtered_df$Rank, 
@@ -171,21 +176,20 @@ ui <- dashboardPage(
                        plotlyOutput("areaChart1")
                 )
               ),
-    
-  ),
-             
+              
+      ),
+      
       # Investor vs State Chart tab
       tabItem(tabName = "investorstate",
               fluidRow(
                 infoBox(
                   "Emission Decrease/Increase calculated",
-                  "Paris Agreement", "in 2015.
-                  If a company was started after 2015, or ended before 2015, the decrease or increase was calculated
-                  by minusing the first year and last year." 
-                                          , icon =
-                    icon("calculator"),
-                  fill = TRUE, width = 3, color = "olive",
-
+                  "Paris Agreement", 
+                  HTML("<p style='margin-bottom:0'>in 2015.
+          If a company was started after 2015, or ended before 2015, the decrease or increase was calculated
+          by minusing the first year and last year.</p>"), 
+                  icon = icon("calculator"),
+                  fill = TRUE, width = 3, color = "olive"
                 ),
                 infoBox(
                   "75 Investor-owned Companies account for", "31% or 440 GtCO₂e", HTML("traced by the databas.
@@ -208,12 +212,12 @@ ui <- dashboardPage(
                                                                            <li>Gazprom</li>
                                                                            <li>National Iranian Oil Company</li>
                                                                            </ul>"
-                                                                            ), icon =
+                  ), icon =
                     icon("angle-double-up"), color = "blue",
                   fill = TRUE, width = 3
                 ),
                 infoBox(
-                   "11 Nation State Companies account for", "36% or 516 GtCO₂e", HTML("traced by the database. Largest contributers:
+                  "11 Nation State Companies account for", "36% or 516 GtCO₂e", HTML("traced by the database. Largest contributers:
                                                              <ul>
                                                                            <li>China's coal production</li>
                                                                            <li>Former Soviet Union</li>
@@ -222,9 +226,9 @@ ui <- dashboardPage(
                                                                            
                                                                            </ul>
                                                                                      "
-                   ),
-            
-                    icon("exclamation-circle"), color = "teal",
+                  ),
+                  
+                  icon("exclamation-circle"), color = "teal",
                   fill = TRUE, width = 3
                 ),
               ),
@@ -263,7 +267,7 @@ ui <- dashboardPage(
                   
                 ),
                 mainPanel(
-                  plotlyOutput("linechart", height = "340px", width = "100%"),
+                  plotlyOutput("linechart", height = "610px", width = "100%"),
                   fluidRow(
                     tags$div(
                       style = "margin-top: 10px; margin-left: 10px;",
@@ -362,7 +366,7 @@ server <- function(input, output, session) {
               plot.title = element_text(hjust = 0.5)) +
         xlim(c(1850, 2022)) +
         ylim(c(0, 100)) +
-        labs(x = "Year", y = "Emissions", title = "Emissions by Year")
+        labs(x = "Year", y = "Emissions", title = "MtCO₂e by Year")
     } else {
       max_emissions <- max(filtered_df()$Emissions, na.rm = TRUE)
       annotation_y <- max_emissions * 1.1 # Adjust the multiplier as needed to position higher
@@ -387,39 +391,41 @@ server <- function(input, output, session) {
   
   
   # Render the lineChart plot for the Individual Company Comparison tab
-output$areaChart <- renderPlotly({
-
-  processed_df$year <- as.numeric(processed_df$year)
+  output$areaChart <- renderPlotly({
+    
+    processed_df$year <- as.numeric(processed_df$year)
+    
+    emissions_chart <- ggplot(processed_df, aes(x=year, y=Emissions, fill=commodity)) +
+      geom_area(alpha=0.8 , size=.5, colour="white") +
+      scale_fill_manual(values = c( "#A4998E", "#507B6A", "#6A513C", "#4B1816")) +
+      theme_minimal() +
+      theme(
+        panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank(),
+        panel.grid.minor.y = element_blank(),
+        axis.line = element_line(color = "black"),
+        axis.ticks.y = element_line(color = "black"),
+        axis.text.y = element_text(hjust = 1),
+        axis.text.x = element_text(hjust = .5),
+        legend.title = element_blank()
+      ) +
+      labs(x = "", y = "MtCO<sub>2</sub>e",
+           title = "Combined MtCO<sub>2</sub>e Emissions by Commodity") +
+      scale_x_continuous(breaks = c(1960, 1980, 2000, 2022), expand = c(0, 0)) + # Adjusted here
+      scale_y_continuous(limits = c(0, NA), expand = c(0, 0)) +
+      labs(col = NULL) + 
+      geom_vline(xintercept = 2015, linetype = "dashed", color = "red") +
+      annotate("text", x = 2015, y = 30000, label = "Paris Agreement", angle = 90, vjust = -0.1, color = "red")
+    
+    p1 <- ggplotly(emissions_chart)
+    
+    p1 <- layout(p1, margin = list(t = 65))
+    
+    p1
+    
+    
+  })
   
-  emissions_chart <- ggplot(processed_df, aes(x=year, y=Emissions, fill=commodity)) +
-    geom_area(alpha=0.6 , size=.5, colour="white") +
-    scale_fill_viridis(discrete = T) +
-    theme_minimal() +
-    theme(
-      panel.grid.major.x = element_blank(),
-      panel.grid.minor.x = element_blank(),
-      panel.grid.minor.y = element_blank(),
-      axis.line = element_line(color = "black"),
-      axis.ticks.y = element_line(color = "black"),
-      axis.text.y = element_text(hjust = 1),
-      axis.text.x = element_text(hjust = .5),
-      legend.title = element_blank()
-    ) +
-    labs(x = "", y = "MtCO<sub>2</sub>e",
-         title = "Combined MtCO<sub>2</sub>e Emissions by Commodity") +
-    scale_x_continuous(breaks = c(1960, 1980, 2000, 2022), expand = c(0, 0)) + # Adjusted here
-    scale_y_continuous(limits = c(0, NA), expand = c(0, 0)) +
-    labs(col = NULL)
-  
-  p1 <- ggplotly(emissions_chart)
-
-  p1 <- layout(p1, margin = list(t = 65))
-  
-  p1
-  
-  
-})
-
   
   
   # Render the areaChart1 plot for the Global tab
@@ -457,7 +463,7 @@ output$areaChart <- renderPlotly({
     gp <- layout(gp, margin = list(t = 65))
     
     gp
-
+    
   })
   
   # Render the investorChart1 plot for the Investor vs State Chart tab
@@ -474,7 +480,7 @@ output$areaChart <- renderPlotly({
         axis.line = element_line(colour = "black", size = 0.5)
       ) +
       scale_y_continuous(limits = c(0, 500), expand = c(0, 0)) +
-      scale_fill_manual(values = c("#95DBE5FF", "#078282FF", "#339E66FF")) +
+      scale_fill_manual(values = c("#b8b8b8", "#031163", "#CD7E2A")) +
       labs(x = "Category", y = HTML("GtCO<sub>2</sub>e"), title = HTML("GtCO<sub>2</sub>e by
 Category"), fill = NULL)
     
@@ -484,7 +490,7 @@ Category"), fill = NULL)
   # Render the investorChart2 plot for the Investor vs State Chart tab
   output$investorChart2 <- renderPlotly({
     gp3 <- ggplot(state_count, aes(x = Rank_Group, y = Count, fill = value_change.y, text = paste("Number: ",
-                                                                                           Count))) +
+                                                                                                  Count))) +
       geom_bar(stat = "identity", position = "dodge") +
       labs(x = "Category", y = "Company Number", fill = "") +
       theme_minimal() +
@@ -497,8 +503,8 @@ Category"), fill = NULL)
         axis.line = element_line(colour = "black", size = 0.5)
       ) +
       scale_y_continuous(limits = c(0, 20), expand = c(0, 0)) +
-      scale_fill_manual(values = c("#40e0d0", "#191970")) +
-      labs(title = HTML("Investor MtCO<sub>2</sub>e"), subtitle = "Decrease vs. Increase")
+      scale_fill_manual(values = c("#CD7E2A", "#191970")) +
+      labs(title = HTML("Investor Decrease vs. Increase"), subtitle = "Decrease vs. Increase")
     
     ggplotly(gp3, tooltip = "text")
     
@@ -520,8 +526,8 @@ Category"), fill = NULL)
         
       ) +
       scale_y_continuous(limits = c(0, 20), expand = c(0, 0)) +
-      scale_fill_manual(values =c("#40e0d0", "#191970")) +
-      labs(x = "Category", y = "Company Number", title = HTML("State MtCO<sub>2</sub>e"))
+      scale_fill_manual(values =c("#CD7E2A", "#191970")) +
+      labs(x = "Category", y = "Company Number", title = HTML("State Decrease vs. Increase"))
     
     ggplotly(gp4, tooltip = "text") %>%
       layout(legend = list(title = list(text = "")))
@@ -530,7 +536,7 @@ Category"), fill = NULL)
   # Render the investorChart4 plot for the Investor vs State Chart tab
   output$investorChart4 <- renderPlotly({
     gp4 <- ggplot(nation_count, aes(x = Rank_Group, y = Count, fill = value_change.y, text = paste("Number: ",
-                                                                                                     Count))) +
+                                                                                                   Count))) +
       geom_bar(stat = "identity", position = "dodge") +
       theme_minimal() +
       theme(
@@ -543,8 +549,8 @@ Category"), fill = NULL)
         
       ) +
       scale_y_continuous(limits = c(0, 20), expand = c(0, 0)) +
-      scale_fill_manual(values =c("#40e0d0", "#191970")) +
-      labs(x = "Category", y = "Company Number", title = HTML("Nation MtCO<sub>2</sub>e"))
+      scale_fill_manual(values =c("#CD7E2A", "#191970")) +
+      labs(x = "Category", y = "Company Number", title = HTML("Nation Decrease vs. Increase"))
     
     ggplotly(gp4, tooltip = "text") %>%
       layout(legend = list(title = list(text = "")))
