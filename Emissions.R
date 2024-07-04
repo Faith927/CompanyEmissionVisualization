@@ -1,5 +1,4 @@
 rm(list=ls())
-
 library(shiny)
 library(shinydashboard)
 library(ggplot2)
@@ -10,7 +9,9 @@ library(tidyverse)
 library(viridis)
 library(RColorBrewer)
 library(hrbrthemes)
-
+library(tidyverse)
+library(gganimate)
+library(animation)
 # Read in Dataframe
 df <- read_csv("emissions_low_granularity.csv")
 df_emissions <- read_csv("emissions_high_granularity.csv")
@@ -169,14 +170,14 @@ ui <- dashboardPage(
                 )
               ),
               fluidRow(
-                column(width = 6,
-                       plotlyOutput("areaChart")
-                ),
-                column(width = 6,
-                       plotlyOutput("areaChart1")
+                column(6, box(width = 12,
+                              img(src="animation.gif", align = "left",height='745px')
+                )),
+                column(6,
+                       box(width = 12, plotlyOutput("areaChart1", height = 350)),
+                       box(width = 12, plotlyOutput("areaChart2", height = 350)),
                 )
               ),
-              
       ),
       
       # Investor vs State Chart tab
@@ -267,7 +268,7 @@ ui <- dashboardPage(
                   
                 ),
                 mainPanel(
-                  plotlyOutput("linechart", height = "610px", width = "100%"),
+                  plotlyOutput("linechart", height = "730px", width = "100%"),
                   fluidRow(
                     tags$div(
                       style = "margin-top: 10px; margin-left: 10px;",
@@ -391,7 +392,7 @@ server <- function(input, output, session) {
   
   
   # Render the lineChart plot for the Individual Company Comparison tab
-  output$areaChart <- renderPlotly({
+  output$areaChart1 <- renderPlotly({
     
     processed_df$year <- as.numeric(processed_df$year)
     
@@ -415,7 +416,7 @@ server <- function(input, output, session) {
       scale_y_continuous(limits = c(0, NA), expand = c(0, 0)) +
       labs(col = NULL) + 
       geom_vline(xintercept = 2015, linetype = "dashed", color = "red") +
-      annotate("text", x = 2015, y = 30000, label = "Paris Agreement", angle = 90, vjust = -0.1, color = "red")
+      annotate("text", x = 2015, y = 36500, label = "Paris Agreement", angle = 90, vjust = -0.1, color = "red")
     
     p1 <- ggplotly(emissions_chart)
     
@@ -429,7 +430,7 @@ server <- function(input, output, session) {
   
   
   # Render the areaChart1 plot for the Global tab
-  output$areaChart1 <- renderPlotly({
+  output$areaChart2 <- renderPlotly({
     df_grouped$Year <- as.numeric(df_grouped$Year)
     
     df_grouped$Status <- factor(df_grouped$Status, levels = c("State-Owned", "Investor-Owned", "Nation State"))
@@ -454,7 +455,10 @@ server <- function(input, output, session) {
       scale_x_continuous(breaks = c(1960, 1980, 2000, 2022)) +
       scale_color_manual(values = c("#E95C20FF", "#006747FF", "#4F2C1DFF")) +
       scale_y_continuous(limits = c(0, NA), expand = c(0, 0)) +
-      labs(col = NULL)
+      labs(col = NULL) + 
+      geom_vline(xintercept = 2015, linetype = "dashed", color = "red") +
+      annotate("text", x = 2015, y = 14500, label = "Paris Agreement", angle = 90, vjust = -0.1, color = "red")
+    
     
     gp1
     
