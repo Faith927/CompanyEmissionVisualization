@@ -10,7 +10,7 @@ MtCO2e is a Shiny dashboard which visualizes the top 122 companies MtCO2e emissi
 Datasets were sourced from the Climate Accountability Institute
 https://carbonmajors.org/Downloads
 
-## Installation 🪛
+## 🪛 Installation
 * Ensure R and Shiny are installed on your system
 * Clone or download the app repository
 * Open Emissions.R in RStudio.
